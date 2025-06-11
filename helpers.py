@@ -5,7 +5,8 @@ import matplotlib.pyplot as plt
 def compute_ranking_loss_df(df):
     """
     Returns a new DataFrame with an additional 'loss' column.
-    Assumes Yagiz and Tugba lists are ordered song indices ranked from 1 to 5.
+    Loss is total sum of absolute rank differences over union of both top-5 lists.
+    Missing songs are assigned increasing virtual ranks (6, 7, ...) on the missing side.
     """
     loss_list = []
 
@@ -13,26 +14,35 @@ def compute_ranking_loss_df(df):
         y_list = row['Yagiz']
         t_list = row['Tugba']
 
-        common = set(y_list) & set(t_list)
-        k = len(common)
-
-        # Loss for songs not in common
-        top5_loss = 10 * (5 - k)
-
-        # Rank dictionaries
+        # Build actual rank dictionaries
         y_ranks = {idx: rank for rank, idx in enumerate(y_list, start=1)}
         t_ranks = {idx: rank for rank, idx in enumerate(t_list, start=1)}
 
-        # Rank difference for shared songs
-        rank_diff_loss = sum(abs(y_ranks[i] - t_ranks[i]) for i in common)
+        # Union of all selected songs
+        union_songs = list(set(y_list) | set(t_list))
 
-        total_loss = top5_loss + rank_diff_loss
+        # Assign virtual ranks for missing songs
+        missing_in_y = [idx for idx in t_list if idx not in y_ranks]
+        missing_in_t = [idx for idx in y_list if idx not in t_ranks]
+
+        next_rank_y = 6
+        for idx in missing_in_y:
+            y_ranks[idx] = next_rank_y
+            next_rank_y += 1
+
+        next_rank_t = 6
+        for idx in missing_in_t:
+            t_ranks[idx] = next_rank_t
+            next_rank_t += 1
+
+        # Now compute absolute rank differences
+        total_loss = sum(abs(y_ranks[idx] - t_ranks[idx]) for idx in union_songs)
         loss_list.append(total_loss)
 
-    # Return new dataframe with an extra column
     df_with_loss = df.copy()
     df_with_loss['loss'] = loss_list
     return df_with_loss
+
 
 def plot_ranking_losses(ranking_loss_df):
     losses = ranking_loss_df['loss'].tolist()
